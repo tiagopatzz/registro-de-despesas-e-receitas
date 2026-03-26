@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Sistema de Finanças</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 40px;
+            background-color: #f8f9fa;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .form-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+            margin-top: 20px;
+        }
+
+        .form-box input,
+        .form-box select,
+        .form-box button {
+            padding: 8px;
+            margin: 5px;
+        }
+
+        /* Estilos da Tabela */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        th,
+        td {
+            border: 1px solid #dee2e6;
+            padding: 12px;
+            text-align: left;
+        }
+
+        /* Estilo para o cabeçalho clicável */
+        th {
+            background-color: #343a40;
+            color: white;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+
+        th:hover {
+            background-color: #495057;
+        }
+
+        /* Fica mais claro ao passar o mouse */
+
+        .receita {
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        .despesa {
+            color: #c0392b;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h2>💰 Registro de Despesas e Receitas</h2>
+        <div>
+            <span>Bem-vindo, <strong>{{ session['usuario_logado'] }}</strong>!</span>
+            <a href="/logout" style="margin-left: 15px; color: red; text-decoration: none;">Sair</a>
+        </div>
+    </div>
+
+    <div class="form-box">
+        <h3>Adicionar Novo Lançamento</h3>
+        <form method="POST">
+            <input type="text" name="descricao" placeholder="Descrição (ex: Mercado)" required>
+            <input type="date" name="data_lancamento" required>
+            <input type="number" step="0.01" name="valor" placeholder="Valor" required>
+            <select name="tipo_lancamento" required>
+                <option value="RECEITA">Receita</option>
+                <option value="DESPESA">Despesa</option>
+            </select>
+            <select name="situacao" required>
+                <option value="PAGO">Pago / Recebido</option>
+                <option value="PENDENTE">Pendente</option>
+            </select>
+            <button type="submit"
+                style="background: #3498db; color: white; border: none; cursor: pointer;">Salvar</button>
+        </form>
+    </div>
+
+    <table id="tabelaLancamentos">
+        <thead>
+            <tr>
+                <th onclick="ordenarTabela(0)">ID ↕️</th>
+                <th onclick="ordenarTabela(1)">Descrição ↕️</th>
+                <th onclick="ordenarTabela(2)">Data ↕️</th>
+                <th onclick="ordenarTabela(3)">Valor (R$) ↕️</th>
+                <th onclick="ordenarTabela(4)">Tipo ↕️</th>
+                <th onclick="ordenarTabela(5)">Situação ↕️</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for l in lancamentos %}
+            <tr>
+                <td>{{ l[0] }}</td>
+                <td>{{ l[1] }}</td>
+                <td>{{ l[2] }}</td>
+                <td>{{ "%.2f"|format(l[3]) }}</td>
+                <td class="{% if l[4] == 'RECEITA' %}receita{% else %}despesa{% endif %}">{{ l[4] }}</td>
+                <td>{{ l[5] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <script>
+        function ordenarTabela(colunaIndex) {
+            var tabela, linhas, trocando, i, x, y, deveTrocar, direcao, contagemTrocas = 0;
+            tabela = document.getElementById("tabelaLancamentos");
+            trocando = true;
+            direcao = "asc"; // Começa ordenando de forma crescente
+
+            while (trocando) {
+                trocando = false;
+                linhas = tabela.rows;
+
+                // Percorre todas as linhas da tabela (exceto o cabeçalho)
+                for (i = 1; i < (linhas.length - 1); i++) {
+                    deveTrocar = false;
+
+                    // Pega os dois elementos que queremos comparar (linha atual e a próxima)
+                    x = linhas[i].getElementsByTagName("TD")[colunaIndex];
+                    y = linhas[i + 1].getElementsByTagName("TD")[colunaIndex];
+
+                    let valorX = x.innerHTML.toLowerCase();
+                    let valorY = y.innerHTML.toLowerCase();
+
+                    // Se for a coluna ID (0) ou Valor (3), transforma em número para ordenar certo
+                    if (colunaIndex === 0 || colunaIndex === 3) {
+                        valorX = parseFloat(valorX);
+                        valorY = parseFloat(valorY);
+                    }
+
+                    if (direcao == "asc") {
+                        if (valorX > valorY) {
+                            deveTrocar = true;
+                            break;
+                        }
+                    } else if (direcao == "desc") {
+                        if (valorX < valorY) {
+                            deveTrocar = true;
+                            break;
+                        }
+                    }
+                }
+                if (deveTrocar) {
+                    // Faz a troca das linhas
+                    linhas[i].parentNode.insertBefore(linhas[i + 1], linhas[i]);
+                    trocando = true;
+                    contagemTrocas++;
+                } else {
+                    // Se não houve troca e a direção era "asc", muda para "desc" e roda de novo
+                    if (contagemTrocas == 0 && direcao == "asc") {
+                        direcao = "desc";
+                        trocando = true;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>
