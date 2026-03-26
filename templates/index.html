@@ -34,7 +34,6 @@
             margin: 5px;
         }
 
-        /* Estilos da Tabela */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -50,7 +49,6 @@
             text-align: left;
         }
 
-        /* Estilo para o cabeçalho clicável */
         th {
             background-color: #343a40;
             color: white;
@@ -62,8 +60,6 @@
         th:hover {
             background-color: #495057;
         }
-
-        /* Fica mais claro ao passar o mouse */
 
         .receita {
             color: #27ae60;
@@ -108,18 +104,16 @@
     <table id="tabelaLancamentos">
         <thead>
             <tr>
-                <th onclick="ordenarTabela(0)">ID ↕️</th>
-                <th onclick="ordenarTabela(1)">Descrição ↕️</th>
-                <th onclick="ordenarTabela(2)">Data ↕️</th>
-                <th onclick="ordenarTabela(3)">Valor (R$) ↕️</th>
-                <th onclick="ordenarTabela(4)">Tipo ↕️</th>
-                <th onclick="ordenarTabela(5)">Situação ↕️</th>
+                <th onclick="ordenarTabela(0)">Descrição ↕️</th>
+                <th onclick="ordenarTabela(1)">Data ↕️</th>
+                <th onclick="ordenarTabela(2)">Valor (R$) ↕️</th>
+                <th onclick="ordenarTabela(3)">Tipo ↕️</th>
+                <th onclick="ordenarTabela(4)">Situação ↕️</th>
             </tr>
         </thead>
         <tbody>
             {% for l in lancamentos %}
             <tr>
-                <td>{{ l[0] }}</td>
                 <td>{{ l[1] }}</td>
                 <td>{{ l[2] }}</td>
                 <td>{{ "%.2f"|format(l[3]) }}</td>
@@ -135,25 +129,22 @@
             var tabela, linhas, trocando, i, x, y, deveTrocar, direcao, contagemTrocas = 0;
             tabela = document.getElementById("tabelaLancamentos");
             trocando = true;
-            direcao = "asc"; // Começa ordenando de forma crescente
+            direcao = "asc";
 
             while (trocando) {
                 trocando = false;
                 linhas = tabela.rows;
 
-                // Percorre todas as linhas da tabela (exceto o cabeçalho)
                 for (i = 1; i < (linhas.length - 1); i++) {
                     deveTrocar = false;
-
-                    // Pega os dois elementos que queremos comparar (linha atual e a próxima)
                     x = linhas[i].getElementsByTagName("TD")[colunaIndex];
                     y = linhas[i + 1].getElementsByTagName("TD")[colunaIndex];
 
                     let valorX = x.innerHTML.toLowerCase();
                     let valorY = y.innerHTML.toLowerCase();
 
-                    // Se for a coluna ID (0) ou Valor (3), transforma em número para ordenar certo
-                    if (colunaIndex === 0 || colunaIndex === 3) {
+                    // Como tiramos o ID, a coluna de Valor agora é a número 2
+                    if (colunaIndex === 2) {
                         valorX = parseFloat(valorX);
                         valorY = parseFloat(valorY);
                     }
@@ -171,12 +162,10 @@
                     }
                 }
                 if (deveTrocar) {
-                    // Faz a troca das linhas
                     linhas[i].parentNode.insertBefore(linhas[i + 1], linhas[i]);
                     trocando = true;
                     contagemTrocas++;
                 } else {
-                    // Se não houve troca e a direção era "asc", muda para "desc" e roda de novo
                     if (contagemTrocas == 0 && direcao == "asc") {
                         direcao = "desc";
                         trocando = true;
