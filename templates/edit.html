@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Editar Lançamento</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f8f9fa; display: flex; justify-content: center; margin-top: 50px; }
+        .box { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 400px; }
+        input, select { width: 95%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
+        button { width: 100%; padding: 10px; background: #f1c40f; color: #2c3e50; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;}
+        button:hover { background: #f39c12; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>✏️ Editar Lançamento</h2>
+        <form method="POST">
+            <label>Descrição</label>
+            <input type="text" name="descricao" value="{{ lancamento[1] }}" required>
+            
+            <label>Data</label>
+            <input type="date" name="data_lancamento" value="{{ lancamento[2] }}" required>
+            
+            <label>Valor</label>
+            <input type="number" step="0.01" name="valor" value="{{ lancamento[3] }}" required>
+            
+            <label>Tipo</label>
+            <select name="tipo_lancamento">
+                <option value="RECEITA" {% if lancamento[4] == 'RECEITA' %}selected{% endif %}>Receita</option>
+                <option value="DESPESA" {% if lancamento[4] == 'DESPESA' %}selected{% endif %}>Despesa</option>
+            </select>
+            
+            <label>Situação</label>
+            <select name="situacao">
+                <option value="PAGO" {% if lancamento[5] == 'PAGO' %}selected{% endif %}>Pago / Recebido</option>
+                <option value="PENDENTE" {% if lancamento[5] == 'PENDENTE' %}selected{% endif %}>Pendente</option>
+            </select>
+            
+            <button type="submit">Salvar Alterações</button>
+        </form>
+        <p style="text-align: center;"><a href="/">Cancelar</a></p>
+    </div>
+</body>
+</html>

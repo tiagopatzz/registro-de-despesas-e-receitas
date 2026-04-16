@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Editar Perfil - Finanças</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f8f9fa; display: flex; justify-content: center; margin-top: 50px; }
+        .box { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 350px; }
+        input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
+        button { width: 100%; padding: 10px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;}
+        button:hover { background: #2980b9; }
+        .sucesso { color: #27ae60; font-size: 0.9em; text-align: center; font-weight: bold;}
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>✏️ Editar Perfil</h2>
+        
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for message in messages %}
+              <p class="sucesso">{{ message }}</p>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+        
+        <form method="POST">
+            <label>Nome Completo</label>
+            <input type="text" name="nome" value="{{ usuario[1] }}" required>
+            
+            <label>Login de Acesso</label>
+            <input type="text" name="login" value="{{ usuario[2] }}" required>
+            
+            <label>E-mail para Notificações</label>
+            <input type="email" name="email" value="{{ usuario[4] if usuario[4] else '' }}" placeholder="seu@email.com" required>
+            
+            <label>Nova Senha (ou repita a atual)</label>
+            <input type="password" name="senha" value="{{ usuario[3] }}" required>
+            
+            <button type="submit">Salvar Alterações</button>
+        </form>
+        <p style="text-align: center; font-size: 0.9em;">
+            <a href="/">Voltar ao Início</a>
+        </p>
+    </div>
+</body>
+</html>
