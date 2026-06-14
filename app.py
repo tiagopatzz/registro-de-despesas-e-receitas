@@ -1,10 +1,23 @@
+import os
+
+# =====================================================================
+# >>> DEMONSTRACAO DE FALHA NO PIPELINE (Tarefa Final - GCS) <<<
+#
+# Para demonstrar que o pipeline BLOQUEIA codigo com erro e NAO segue
+# para o deploy, descomente a linha abaixo, faca commit e push na
+# branch 'homolog'. O flake8 acusa E999 (SyntaxError) e os 20 testes
+# falham no "from app import app" -> deploy fica como "Skipped".
+# Depois, comente novamente e faca push -> pipeline volta a passar.
+# =====================================================================
+# def funcao_quebrada(:
+
 from flask import Flask, render_template, request, redirect, url_for, session, flash, make_response
 import psycopg2
 from flask_mail import Mail, Message
 from fpdf import FPDF
 
 app = Flask(__name__)
-app.secret_key = 'chave_secreta_tarefa_3'
+app.secret_key = os.environ.get('SECRET_KEY', 'chave_secreta_tarefa_3')
 
 # --- CONFIGURAÇÃO DE E-MAIL ---
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
@@ -14,8 +27,32 @@ app.config['MAIL_USERNAME'] = 'tiago.patzlaff@universo.univates.br'
 app.config['MAIL_PASSWORD'] = 'senha'
 mail = Mail(app)
 
+# Permite servir atras do NGINX em /homolog ou /prod (via APP_PREFIX).
+# Sem APP_PREFIX (local e nos testes), nao tem efeito.
+class PrefixMiddleware:
+    def __init__(self, wsgi_app, prefix=''):
+        self.wsgi_app = wsgi_app
+        self.prefix = prefix
+
+    def __call__(self, environ, start_response):
+        if self.prefix:
+            environ['SCRIPT_NAME'] = self.prefix
+            path = environ.get('PATH_INFO', '')
+            if path.startswith(self.prefix):
+                environ['PATH_INFO'] = path[len(self.prefix):] or '/'
+        return self.wsgi_app(environ, start_response)
+
+
+app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix=os.environ.get('APP_PREFIX', ''))
+
+
 def get_db_connection():
-    return psycopg2.connect(host="localhost", database="financas", user="postgres", password="postgres", port="5432")
+    return psycopg2.connect(
+        host=os.environ.get("DB_HOST", "localhost"),
+        database=os.environ.get("DB_NAME", "financas"),
+        user=os.environ.get("DB_USER", "postgres"),
+        password=os.environ.get("DB_PASSWORD", "postgres"),
+        port=os.environ.get("DB_PORT", "5432"))
 
 # --- FUNÇÕES DE E-MAIL ---
 def enviar_email_notificacao(tipo_acao, descricao, detalhes=""):

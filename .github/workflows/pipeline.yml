@@ -1,0 +1,100 @@
+# =====================================================================
+# PIPELINE CI/CD - Gerencia de Configuracao de Software (Tarefa Final)
+#
+# Fluxo (igual ao diagrama da arquitetura):
+#   push na branch 'homolog' -> Integracao -> Deploy HOMOLOG
+#   push na branch 'main'    -> Integracao -> Deploy PRODUCAO
+#
+# A "Integracao" roda em runner do GitHub (ubuntu-latest):
+#   testes automatizados (20), estatisticas de cobertura, flake8 e build.
+# Os deploys rodam no runner SELF-HOSTED instalado na VM da Univates.
+#
+# Se a Integracao FALHAR (teste quebrado, erro de sintaxe), os jobs de
+# deploy NAO executam -> codigo errado nunca chega aos ambientes.
+# =====================================================================
+name: Pipeline CI/CD - GCS
+
+on:
+  push:
+    branches: [homolog, main]
+  workflow_dispatch:   # processo semi-automatizado: permite disparo por clique
+
+jobs:
+  integracao:
+    name: "Integracao (testes + qualidade + build)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Analise de qualidade de codigo (flake8)
+        run: flake8 app.py test_app.py migrate.py
+
+      - name: Testes automatizados (20 testes unitarios)
+        run: coverage run -m unittest -v
+
+      - name: Estatisticas de execucao dos testes (coverage)
+        run: |
+          coverage report -m
+          coverage xml
+
+      - name: Publicar estatisticas como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: estatisticas-cobertura
+          path: coverage.xml
+
+      - name: Build da imagem Docker
+        run: docker build -t financas-app:${{ github.sha }} .
+
+  deploy-homolog:
+    name: "Atualizar ambiente de HOMOLOGACAO"
+    needs: integracao
+    if: github.ref == 'refs/heads/homolog'
+    runs-on: self-hosted
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Garantir rede compartilhada
+        run: docker network inspect gcs_net >/dev/null 2>&1 || docker network create gcs_net
+
+      - name: Subir/atualizar Homolog (build + migrations + app)
+        run: docker compose -f docker-compose.homolog.yml up -d --build
+
+      - name: Versao do banco em Homolog
+        run: |
+          sleep 5
+          docker compose -f docker-compose.homolog.yml exec -T db-homolog \
+            psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"
+
+  deploy-prod:
+    name: "Atualizar ambiente de PRODUCAO"
+    needs: integracao
+    if: github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Garantir rede compartilhada
+        run: docker network inspect gcs_net >/dev/null 2>&1 || docker network create gcs_net
+
+      - name: Subir/atualizar Producao (build + migrations + app)
+        run: docker compose -f docker-compose.prod.yml up -d --build
+
+      - name: Versao do banco em Producao
+        run: |
+          sleep 5
+          docker compose -f docker-compose.prod.yml exec -T db-prod \
+            psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"

@@ -1,0 +1,6 @@
+.git
+__pycache__
+*.pyc
+nohup.out
+.coverage
+coverage.xml

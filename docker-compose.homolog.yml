@@ -1,0 +1,49 @@
+# AMBIENTE DE HOMOLOGACAO
+# App Flask + PostgreSQL proprios, com volume de dados exclusivo (vol_hml).
+# Acessivel via NGINX em http://<IP-DA-VM>/homolog/
+name: financas-homolog
+
+services:
+  db-homolog:
+    image: postgres:16-alpine
+    container_name: db-homolog
+    environment:
+      POSTGRES_DB: financas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - vol_hml:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d financas"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - gcs_net
+
+  app-homolog:
+    build: .
+    image: financas-app:homolog
+    container_name: app-homolog
+    environment:
+      APP_PREFIX: /homolog
+      DB_HOST: db-homolog
+      DB_NAME: financas
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_PORT: "5432"
+      SECRET_KEY: chave_homolog
+      MAIL_USERNAME: ${MAIL_USERNAME:-tiago.patzlaff@universo.univates.br}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-senha}
+    depends_on:
+      db-homolog:
+        condition: service_healthy
+    networks:
+      - gcs_net
+
+volumes:
+  vol_hml:
+
+networks:
+  gcs_net:
+    external: true

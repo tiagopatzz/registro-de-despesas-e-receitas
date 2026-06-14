@@ -1,0 +1,7 @@
+[flake8]
+; Analise de qualidade de codigo (PEP 8).
+; Linhas longas e comandos compostos sao tolerados (estilo do projeto),
+; mas erros reais de sintaxe (E999) e problemas graves REPROVAM o pipeline.
+max-line-length = 200
+extend-ignore = E701, E702, E704
+exclude = .git, __pycache__, .venv
