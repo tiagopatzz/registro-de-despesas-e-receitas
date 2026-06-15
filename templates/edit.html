@@ -14,7 +14,7 @@
 <body>
     <div class="box">
         <h2>✏️ Editar Lançamento</h2>
-        <form method="POST">
+        <form method="POST" action="{{ url_for('edit', id=lancamento[0]) }}">
             <label>Descrição</label>
             <input type="text" name="descricao" value="{{ lancamento[1] }}" required>
             
@@ -38,7 +38,7 @@
             
             <button type="submit">Salvar Alterações</button>
         </form>
-        <p style="text-align: center;"><a href="/">Cancelar</a></p>
+        <p style="text-align: center;"><a href="{{ url_for('index') }}">Cancelar</a></p>
     </div>
 </body>
 </html>

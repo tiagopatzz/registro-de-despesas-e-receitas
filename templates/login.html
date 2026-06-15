@@ -57,13 +57,13 @@
         {% endif %}
         {% endwith %}
 
-        <form method="POST">
+        <form method="POST" action="{{ url_for('login') }}">
             <input type="text" name="login" placeholder="Usuário" required>
             <input type="password" name="senha" placeholder="Senha" required>
             <button type="submit">Entrar</button>
         </form>
         <p style="text-align: center; font-size: 0.9em;">
-            <a href="/cadastro">Criar novo usuário</a>
+            <a href="{{ url_for('cadastro') }}">Criar novo usuário</a>
             </form>
     </div>
 </body>

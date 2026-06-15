@@ -24,7 +24,7 @@
           {% endif %}
         {% endwith %}
         
-        <form method="POST">
+        <form method="POST" action="{{ url_for('perfil') }}">
             <label>Nome Completo</label>
             <input type="text" name="nome" value="{{ usuario[1] }}" required>
             
@@ -40,7 +40,7 @@
             <button type="submit">Salvar Alterações</button>
         </form>
         <p style="text-align: center; font-size: 0.9em;">
-            <a href="/">Voltar ao Início</a>
+            <a href="{{ url_for('index') }}">Voltar ao Início</a>
         </p>
     </div>
 </body>

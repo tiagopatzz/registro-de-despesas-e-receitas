@@ -24,7 +24,7 @@
           {% endif %}
         {% endwith %}
         
-        <form method="POST">
+        <form method="POST" action="{{ url_for('cadastro') }}">
             <input type="text" name="nome" placeholder="Nome Completo" required>
             <input type="email" name="email" placeholder="Seu E-mail" required>
             <input type="text" name="login" placeholder="Login de Acesso" required>
@@ -32,7 +32,7 @@
             <button type="submit">Cadastrar</button>
         </form>
         <p style="text-align: center; font-size: 0.9em;">
-            <a href="/login" style="color: #3498db; text-decoration: none;">Voltar para o Login</a>
+            <a href="{{ url_for('login') }}" style="color: #3498db; text-decoration: none;">Voltar para o Login</a>
         </p>
     </div>
 </body>

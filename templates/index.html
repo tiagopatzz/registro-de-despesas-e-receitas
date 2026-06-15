@@ -37,14 +37,14 @@
         <h2>💰 Registro de Despesas e Receitas</h2>
         <div>
             <span>Bem-vindo, <strong>{{ session['usuario_logado'] }}</strong>!</span>
-            <a href="/perfil" style="margin-left: 15px; color: #3498db; text-decoration: none; font-weight: bold;">Editar Perfil</a>
-            <a href="/logout" style="margin-left: 15px; color: red; text-decoration: none; font-weight: bold;">Sair</a>
+            <a href="{{ url_for('perfil') }}" style="margin-left: 15px; color: #3498db; text-decoration: none; font-weight: bold;">Editar Perfil</a>
+            <a href="{{ url_for('logout') }}" style="margin-left: 15px; color: red; text-decoration: none; font-weight: bold;">Sair</a>
         </div>
     </div>
     
     <div class="form-box">
         <h3>Filtros e Relatórios</h3>
-        <form method="GET" action="/" class="filtros-container">
+        <form method="GET" action="{{ url_for('index') }}" class="filtros-container">
             <label>De: <input type="date" name="data_inicio"></label>
             <label>Até: <input type="date" name="data_fim"></label>
             <select name="status">
@@ -53,13 +53,13 @@
                 <option value="PENDENTE">Pendente</option>
             </select>
             <button type="submit" class="btn-filtrar">🔍 Filtrar</button>
-            <a href="/exportar_pdf" class="btn-pdf">📄 Exportar PDF</a>
+            <a href="{{ url_for('exportar_pdf') }}" class="btn-pdf">📄 Exportar PDF</a>
         </form>
     </div>
 
     <div class="form-box">
         <h3>Adicionar Novo Lançamento</h3>
-        <form method="POST" action="/">
+        <form method="POST" action="{{ url_for('index') }}">
             <input type="text" name="descricao" placeholder="Descrição (ex: Mercado)" required>
             <input type="date" name="data_lancamento" required>
             <input type="number" step="0.01" name="valor" placeholder="Valor" required>
@@ -95,8 +95,8 @@
                 <td>{{ l[5] }}</td>
                 
                 <td style="text-align: center;">
-                    <a href="/edit/{{ l[0] }}" style="text-decoration: none; font-size: 1.2em; margin-right: 15px;" title="Editar Lançamento">✏️</a>
-                    <a href="/delete/{{ l[0] }}" class="btn-excluir" title="Excluir Lançamento" onclick="return confirm('Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.')">🗑️</a>
+                    <a href="{{ url_for('edit', id=l[0]) }}" style="text-decoration: none; font-size: 1.2em; margin-right: 15px;" title="Editar Lançamento">✏️</a>
+                    <a href="{{ url_for('delete', id=l[0]) }}" class="btn-excluir" title="Excluir Lançamento" onclick="return confirm('Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.')">🗑️</a>
                 </td>
             </tr>
             {% else %}
