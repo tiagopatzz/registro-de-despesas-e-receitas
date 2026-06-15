@@ -1,31 +1,27 @@
 # =====================================================================
 # PIPELINE CI/CD - Gerencia de Configuracao de Software (Tarefa Final)
 #
-# Fluxo (igual ao diagrama da arquitetura):
-#   push na branch 'homolog' -> Integracao -> Deploy HOMOLOG
-#   push na branch 'main'    -> Integracao -> Deploy PRODUCAO
+#   push em 'homolog' -> Integracao -> Deploy HOMOLOG
+#   push em 'main'    -> Integracao -> Deploy PRODUCAO
 #
-# A "Integracao" roda em runner do GitHub (ubuntu-latest):
-#   testes automatizados (20), estatisticas de cobertura, flake8 e build.
-# Os deploys rodam no runner SELF-HOSTED instalado na VM da Univates.
-#
-# Se a Integracao FALHAR (teste quebrado, erro de sintaxe), os jobs de
-# deploy NAO executam -> codigo errado nunca chega aos ambientes.
+# Integracao roda na nuvem do GitHub (ubuntu-latest):
+#   flake8 -> 20 testes -> estatisticas de cobertura -> build.
+# Deploys rodam no runner SELF-HOSTED instalado na VM da Univates.
+# Se a Integracao FALHAR, os deploys NAO executam (ficam Skipped).
 # =====================================================================
 name: Pipeline CI/CD - GCS
 
 on:
   push:
     branches: [homolog, main]
-  workflow_dispatch:   # processo semi-automatizado: permite disparo por clique
+  workflow_dispatch:
 
 jobs:
   integracao:
     name: "Integracao (testes + qualidade + build)"
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout do codigo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configurar Python 3.12
         uses: actions/setup-python@v5
@@ -37,18 +33,18 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Analise de qualidade de codigo (flake8)
+      - name: Analise de qualidade (flake8)
         run: flake8 app.py test_app.py migrate.py
 
-      - name: Testes automatizados (20 testes unitarios)
+      - name: Testes automatizados (20 testes)
         run: coverage run -m unittest -v
 
-      - name: Estatisticas de execucao dos testes (coverage)
+      - name: Estatisticas de cobertura
         run: |
           coverage report -m
           coverage xml
 
-      - name: Publicar estatisticas como artefato
+      - name: Publicar estatisticas (artefato)
         uses: actions/upload-artifact@v4
         with:
           name: estatisticas-cobertura
@@ -58,43 +54,29 @@ jobs:
         run: docker build -t financas-app:${{ github.sha }} .
 
   deploy-homolog:
-    name: "Atualizar ambiente de HOMOLOGACAO"
+    name: "Atualizar HOMOLOGACAO"
     needs: integracao
     if: github.ref == 'refs/heads/homolog'
     runs-on: self-hosted
     steps:
-      - name: Checkout do codigo
-        uses: actions/checkout@v4
-
-      - name: Garantir rede compartilhada
-        run: docker network inspect gcs_net >/dev/null 2>&1 || docker network create gcs_net
-
-      - name: Subir/atualizar Homolog (build + migrations + app)
-        run: docker compose -f docker-compose.homolog.yml up -d --build
-
+      - uses: actions/checkout@v4
+      - name: Atualizar Homolog (NGINX + app + migrations)
+        run: docker compose up -d --build nginx app-homolog db-homolog
       - name: Versao do banco em Homolog
         run: |
           sleep 5
-          docker compose -f docker-compose.homolog.yml exec -T db-homolog \
-            psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"
+          docker compose exec -T db-homolog psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"
 
   deploy-prod:
-    name: "Atualizar ambiente de PRODUCAO"
+    name: "Atualizar PRODUCAO"
     needs: integracao
     if: github.ref == 'refs/heads/main'
     runs-on: self-hosted
     steps:
-      - name: Checkout do codigo
-        uses: actions/checkout@v4
-
-      - name: Garantir rede compartilhada
-        run: docker network inspect gcs_net >/dev/null 2>&1 || docker network create gcs_net
-
-      - name: Subir/atualizar Producao (build + migrations + app)
-        run: docker compose -f docker-compose.prod.yml up -d --build
-
+      - uses: actions/checkout@v4
+      - name: Atualizar Producao (NGINX + app + migrations)
+        run: docker compose up -d --build nginx app-prod db-prod
       - name: Versao do banco em Producao
         run: |
           sleep 5
-          docker compose -f docker-compose.prod.yml exec -T db-prod \
-            psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"
+          docker compose exec -T db-prod psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"

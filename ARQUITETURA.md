@@ -81,20 +81,16 @@ do zero é feita por script: `./scripts/criar_ambientes.sh`.
 ├── templates/                    # login, cadastro, index, perfil, edit
 ├── Dockerfile                    # imagem da aplicação (python:3.12-slim)
 ├── entrypoint.sh                 # migrate.py + gunicorn na subida do container
-├── docker-compose.homolog.yml    # ambiente de Homologação
-├── docker-compose.prod.yml       # ambiente de Produção
-├── docker-compose.infra.yml      # NGINX (proxy reverso)
+├── docker-compose.yml            # TUDO: NGINX + Homolog + Prod (down -v limpa tudo)
 ├── nginx/nginx.conf              # rotas /homolog e /prod
 ├── .github/workflows/pipeline.yml  # pipeline CI/CD
 ├── .flake8                       # configuração da análise de qualidade
 └── scripts/
     ├── preparar_vm.sh            # instala Docker na VM (uma vez)
-    ├── criar_homolog.sh          # cria/sobe SÓ Homologação
-    ├── criar_prod.sh             # cria/sobe SÓ Produção
-    ├── destruir_homolog.sh       # remove SÓ Homologação
-    ├── destruir_prod.sh          # remove SÓ Produção
-    ├── criar_ambientes.sh        # cria os dois de uma vez (atalho)
-    └── destruir_ambientes.sh     # remove os dois de uma vez (atalho)
+    ├── criar_homolog.sh          # sobe NGINX + Homologação
+    ├── criar_prod.sh             # sobe NGINX + Produção
+    ├── criar_ambientes.sh        # sobe NGINX + Homolog + Prod
+    └── destruir_ambientes.sh     # remove TUDO (docker ps fica vazio)
 ```
 
 ## 4. Configuração inicial (antes da apresentação)
@@ -127,7 +123,7 @@ do zero é feita por script: `./scripts/criar_ambientes.sh`.
 10. **Atualizar Homologação:** o job *deploy-homolog* roda sozinho após a Integração
     (ou via *Run workflow*).
 11. **Homolog atualizado + banco:** mostrar o app em `/homolog/` e a tabela nova:
-    `docker compose -f docker-compose.homolog.yml exec db-homolog psql -U postgres -d financas -c '\dt'`
+    `docker compose exec db-homolog psql -U postgres -d financas -c '\dt'`
     → a tabela `categoria` existe em Homolog. Em Prod, **não** (rodar o mesmo comando no `db-prod`).
 12. **Atualizar Produção:** quando desejado, `git checkout main && git merge homolog && git push origin main`
     → job *deploy-prod* executa.

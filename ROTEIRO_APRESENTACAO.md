@@ -4,9 +4,56 @@ Simulação completa, passo a passo, do que fazer e falar na banca.
 Os 13 passos do enunciado estão mapeados abaixo, mais a demo de falha (passo 6 do seu pedido).
 
 > **Antes de começar:** garanta que já fez UMA vez na vida da VM:
-> `./scripts/preparar_vm.sh` (instala Docker + cria rede) e que o **runner self-hosted**
+> `./scripts/preparar_vm.sh` (instala Docker) e que o **runner self-hosted**
 > do GitHub está rodando como serviço. Isso NÃO faz parte da apresentação — é setup prévio.
 > Tenha dois terminais abertos na VM e o navegador no GitHub Actions do repositório.
+
+---
+
+## SETUP MANUAL (fazer ANTES da apresentação, uma vez)
+
+Estas coisas **não** são automáticas — você precisa configurar:
+
+### 1. Enviar este código para o GitHub
+```bash
+# na sua máquina, dentro da pasta do projeto já com os arquivos novos
+git add .
+git commit -m "Configura pipeline CI/CD, Docker e migrations (Tarefa Final)"
+git push origin main
+```
+
+### 2. Criar a branch homolog (você só tem a main hoje)
+As branches **NÃO** são criadas automaticamente. Crie a `homolog` a partir da `main`:
+```bash
+git checkout main
+git pull origin main
+git checkout -b homolog
+git push -u origin homolog
+```
+Pronto: agora existem `main` (→ Produção) e `homolog` (→ Homologação). O workflow já
+está configurado para reagir a push nessas duas branches.
+
+### 3. Instalar o runner self-hosted na VM
+No GitHub: **Settings → Actions → Runners → New self-hosted runner → Linux x64**.
+Rode os comandos que a página mostra, dentro da VM. Ao final, instale como serviço:
+```bash
+sudo ./svc.sh install
+sudo ./svc.sh start
+```
+Confirme em Settings → Actions → Runners que ele aparece como **Idle** (verde).
+
+### 4. (Opcional) Senha de e-mail
+Se for demonstrar o envio de e-mail, exporte a senha de app do Gmail no ambiente do
+runner, ou crie um arquivo `.env` na pasta do projeto na VM com:
+```
+MAIL_PASSWORD=sua_senha_de_app
+```
+
+### O que é automático (você NÃO precisa fazer)
+- O pipeline dispara sozinho a cada `git push` nas branches `homolog`/`main`.
+- O bloqueio do deploy quando a Integração falha é automático (`needs: integracao`).
+- As migrations são aplicadas sozinhas quando o container sobe.
+- A rede e os volumes do Docker são criados sozinhos pelo `docker compose`.
 
 ---
 
@@ -15,30 +62,27 @@ Os 13 passos do enunciado estão mapeados abaixo, mais a demo de falha (passo 6 
 Objetivo: começar com os ambientes **inexistentes**, para poder criá-los ao vivo.
 
 ```bash
-# Limpa Homolog e Prod (containers + volumes). O NGINX pode ficar de pé.
-./scripts/destruir_homolog.sh
-./scripts/destruir_prod.sh
+# Remove TUDO (containers, volumes, rede e NGINX)
+./scripts/destruir_ambientes.sh
 
-# Garante que o NGINX (proxy) está no ar
-docker compose -f docker-compose.infra.yml up -d
-
-docker ps   # deve mostrar SÓ o nginx-gcs
+docker ps   # deve estar VAZIO (nada rodando) - como o professor pediu
 ```
 
-**O que falar:** "Vou começar com a estrutura zerada para mostrar a criação automatizada dos ambientes."
+**O que falar:** "Vou começar com a estrutura totalmente zerada, sem nenhum container rodando,
+para mostrar a criação automatizada dos ambientes."
 
 ---
 
 ## PASSO 1 — Apresentar ambientes com a estrutura NÃO existente
 
 ```bash
-docker ps                       # só o nginx aparece
-curl -I http://localhost/homolog/   # retorna 502 Bad Gateway
-curl -I http://localhost/prod/      # retorna 502 Bad Gateway
+docker ps                       # VAZIO - nada rodando
+curl -I http://localhost/homolog/   # sem resposta (NGINX nem está no ar)
+curl -I http://localhost/prod/      # sem resposta
 ```
 
-**O que falar:** "Repare que não existe nenhum container de aplicação nem de banco. As URLs
-retornam 502 porque o NGINX não tem para onde encaminhar ainda."
+**O que falar:** "Repare: o `docker ps` está vazio. Não há nenhum container — nem NGINX, nem
+aplicação, nem banco. Nada rodando."
 
 ---
 
@@ -52,7 +96,7 @@ retornam 502 porque o NGINX não tem para onde encaminhar ainda."
 do `app-homolog` você vê o `migrate.py` aplicando **V001** (tabelas) e **V002** (dados).
 
 ```bash
-docker compose -f docker-compose.homolog.yml logs app-homolog | grep migrate
+docker compose logs app-homolog | grep migrate
 ```
 
 **O que falar:** "Um único comando criou o container, instalou as ferramentas dentro dele,
@@ -64,8 +108,13 @@ aplicou as migrations do banco e subiu a aplicação."
 
 ```bash
 ./scripts/criar_prod.sh
-docker ps   # agora: nginx, app-homolog, db-homolog, app-prod, db-prod
+docker ps   # agora: nginx-gcs, app-homolog, db-homolog, app-prod, db-prod
 ```
+
+> É normal e esperado que apareçam containers AGORA — a aplicação precisa estar rodando para
+> ser demonstrada. A exigência do professor ("nada rodando") vale para o estado de REPOUSO,
+> no início e no fim. Ao terminar, rode `./scripts/destruir_ambientes.sh` e o `docker ps`
+> volta a ficar vazio.
 
 ---
 
@@ -134,6 +183,14 @@ na Integração — nem o lint nem os testes — a etapa de deploy nem chega a r
 de Homologação continua funcionando com a versão anterior. Nenhum código quebrado chega aos
 ambientes."
 
+> **Esclarecimento sobre "proibir ir para a outra branch":** o pipeline não impede
+> fisicamente o `git push` nem o merge — o Git aceita o push do código quebrado para a branch
+> `homolog`. O que o pipeline bloqueia é o **deploy**: o código quebrado fica na branch, mas
+> NÃO é publicado em nenhum ambiente, porque o job de deploy só roda se a Integração passar
+> (`needs: integracao`). Se quiser também impedir o merge de `homolog` para `main` enquanto a
+> Integração estiver vermelha, dá para ativar **Branch Protection** na `main` (Settings →
+> Branches → Add rule → "Require status checks to pass") — opcional, mas reforça o discurso.
+
 **5. Reverter o erro** (comentar de novo) para liberar o fluxo:
 ```bash
 # voltar a linha para: # def funcao_quebrada(:
@@ -188,7 +245,7 @@ Se preferir disparar manualmente: GitHub → Actions → *Run workflow* na branc
 
 ```bash
 # acompanhar na VM:
-docker compose -f docker-compose.homolog.yml logs app-homolog | grep migrate
+docker compose logs app-homolog | grep migrate
 ```
 Você verá: `V003 aplicada com sucesso`.
 
@@ -199,7 +256,7 @@ Você verá: `V003 aplicada com sucesso`.
 Mostrar a tabela nova SÓ em Homolog:
 
 ```bash
-docker compose -f docker-compose.homolog.yml exec db-homolog \
+docker compose exec db-homolog \
   psql -U postgres -d financas -c '\dt'
 # aparece: usuario, lancamento, schema_migrations, CATEGORIA  ✅
 ```
@@ -207,7 +264,7 @@ docker compose -f docker-compose.homolog.yml exec db-homolog \
 E provar que em Produção **NÃO** existe ainda:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec db-prod \
+docker compose exec db-prod \
   psql -U postgres -d financas -c '\dt'
 # NÃO aparece categoria  ❌  (Prod está na versão anterior do banco)
 ```
@@ -235,7 +292,7 @@ O push na `main` dispara a Integração de novo e, passando, o job **deploy-prod
 ## PASSO 13 — Prod atualizado + atualização do Banco de Dados
 
 ```bash
-docker compose -f docker-compose.prod.yml exec db-prod \
+docker compose exec db-prod \
   psql -U postgres -d financas -c '\dt'
 # agora a tabela CATEGORIA aparece também em Produção  ✅
 ```

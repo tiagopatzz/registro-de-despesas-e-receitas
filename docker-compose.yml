@@ -1,0 +1,106 @@
+# =====================================================================
+# AMBIENTE COMPLETO - Tarefa Final GCS
+# Um unico arquivo sobe TUDO: NGINX + Homolog (app+db) + Prod (app+db).
+# Assim "docker compose down -v" remove tudo e o "docker ps" fica limpo.
+#
+# Subir tudo:        docker compose up -d --build
+# Subir so homolog:  docker compose up -d --build nginx app-homolog db-homolog
+# Subir so prod:     docker compose up -d --build nginx app-prod db-prod
+# Derrubar tudo:     docker compose down -v
+# =====================================================================
+name: financas-gcs
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx-gcs
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - gcs_net
+
+  # ----------------------- HOMOLOGACAO -----------------------
+  db-homolog:
+    image: postgres:16-alpine
+    container_name: db-homolog
+    environment:
+      POSTGRES_DB: financas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - vol_hml:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d financas"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - gcs_net
+
+  app-homolog:
+    build: .
+    image: financas-app:homolog
+    container_name: app-homolog
+    environment:
+      APP_PREFIX: /homolog
+      DB_HOST: db-homolog
+      DB_NAME: financas
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_PORT: "5432"
+      SECRET_KEY: chave_homolog
+      MAIL_USERNAME: ${MAIL_USERNAME:-tiago.patzlaff@universo.univates.br}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-senha}
+    depends_on:
+      db-homolog:
+        condition: service_healthy
+    networks:
+      - gcs_net
+
+  # ------------------------ PRODUCAO -------------------------
+  db-prod:
+    image: postgres:16-alpine
+    container_name: db-prod
+    environment:
+      POSTGRES_DB: financas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - vol_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d financas"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - gcs_net
+
+  app-prod:
+    build: .
+    image: financas-app:prod
+    container_name: app-prod
+    environment:
+      APP_PREFIX: /prod
+      DB_HOST: db-prod
+      DB_NAME: financas
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_PORT: "5432"
+      SECRET_KEY: chave_prod
+      MAIL_USERNAME: ${MAIL_USERNAME:-tiago.patzlaff@universo.univates.br}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-senha}
+    depends_on:
+      db-prod:
+        condition: service_healthy
+    networks:
+      - gcs_net
+
+volumes:
+  vol_hml:
+  vol_prod:
+
+networks:
+  gcs_net:
+    driver: bridge
