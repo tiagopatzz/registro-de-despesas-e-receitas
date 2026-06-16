@@ -274,7 +274,7 @@ def cadastro():
             conn.close()
             flash('Usuário criado com sucesso! Faça seu login.')
             return redirect(url_for('login'))
-        except Exception as e:
+        except Exception:
             flash('Erro ao criar usuário. O login já pode estar em uso.')
             
     return render_template('cadastro.html')

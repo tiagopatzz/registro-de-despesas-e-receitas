@@ -62,27 +62,28 @@ MAIL_PASSWORD=sua_senha_de_app
 Objetivo: começar com os ambientes **inexistentes**, para poder criá-los ao vivo.
 
 ```bash
-# Remove TUDO (containers, volumes, rede e NGINX)
+# Remove TUDO: containers, volumes, rede E imagens do projeto
 ./scripts/destruir_ambientes.sh
 
-docker ps   # deve estar VAZIO (nada rodando) - como o professor pediu
+docker ps        # VAZIO - nada rodando
+docker images    # sem nenhuma imagem do projeto (financas-app, nginx:1.27, postgres:16-alpine)
 ```
 
-**O que falar:** "Vou começar com a estrutura totalmente zerada, sem nenhum container rodando,
-para mostrar a criação automatizada dos ambientes."
+**O que falar:** "Vou começar com a VM totalmente zerada em relação ao projeto: nenhum
+container rodando e nenhuma imagem do sistema. Vou criar toda a infraestrutura do zero,
+de forma automatizada."
 
 ---
 
 ## PASSO 1 — Apresentar ambientes com a estrutura NÃO existente
 
 ```bash
-docker ps                       # VAZIO - nada rodando
-curl -I http://localhost/homolog/   # sem resposta (NGINX nem está no ar)
-curl -I http://localhost/prod/      # sem resposta
+docker ps        # VAZIO - nenhum container
+docker images    # sem imagens do projeto
 ```
 
-**O que falar:** "Repare: o `docker ps` está vazio. Não há nenhum container — nem NGINX, nem
-aplicação, nem banco. Nada rodando."
+**O que falar:** "Repare: `docker ps` vazio e `docker images` sem nada do projeto. A VM está
+limpa. Tudo o que vier a seguir é criado automaticamente pelos scripts."
 
 ---
 
@@ -92,8 +93,12 @@ aplicação, nem banco. Nada rodando."
 ./scripts/criar_homolog.sh
 ```
 
-**O que acontece:** o Docker constrói a imagem, sobe `db-homolog` e `app-homolog`. No log
-do `app-homolog` você vê o `migrate.py` aplicando **V001** (tabelas) e **V002** (dados).
+**O que acontece:** o script baixa as imagens base (python, nginx, postgres), constrói a
+imagem da aplicação do zero, sobe `db-homolog` e `app-homolog`. No log do `app-homolog`
+você vê o `migrate.py` aplicando **V001** (tabelas) e **V002** (dados).
+
+> A primeira criação após o destruir leva mais tempo (baixa as bases). É esperado e
+> demonstra a criação 100% automatizada da infraestrutura.
 
 ```bash
 docker compose logs app-homolog | grep migrate
@@ -277,15 +282,15 @@ permanece na versão anterior do schema."
 
 ## PASSO 12 — Atualizar ambiente de Produção
 
-Promover a mudança para produção (merge na `main`):
+Promover a mudança para produção usando o script de promoção controlada:
 
 ```bash
-git checkout main
-git merge homolog
-git push origin main
+./scripts/promover_producao.sh
+# digite PROMOVER quando pedir confirmação
 ```
 
-O push na `main` dispara a Integração de novo e, passando, o job **deploy-prod**.
+O script faz o merge `homolog → main` e o push. O push na `main` dispara a Integração
+de novo e, passando, o job **deploy-prod** atualiza a Produção.
 
 ---
 
@@ -336,3 +341,54 @@ git pull origin main    && ./scripts/criar_prod.sh      # atualiza Prod
 ```
 
 Vale confirmar o acesso à internet da VM antes da apresentação, para saber qual caminho seguir.
+
+---
+
+## ANEXO — Seus 3 momentos-chave da demonstração
+
+Mapeamento direto dos três pontos que você vai demonstrar, na ordem sugerida.
+
+### Momento 1 — Erro NÃO segue para aprovação de produção
+1. Na branch `homolog`, descomente a linha do erro no `app.py` (tire o `# ` de
+   `# def funcao_quebrada(:`).
+2. `git add app.py && git commit -m "CHG: demo de falha" && git push origin homolog`
+3. No GitHub Actions: job **Integração VERMELHO** (flake8 acusa E999; os 20 testes nem rodam).
+4. Mostre que o deploy fica **Skipped** → nada vai para homolog nem para produção.
+5. **NÃO rode** `promover_producao.sh` — ou, se rodar, mostre que você não deve promover
+   um commit que está vermelho no Actions (o portão é o Actions, e ele reprovou).
+6. Reverta: comente a linha de novo, commit e push → Actions **VERDE**.
+
+> Discurso: "O erro trava na Integração. Sem Integração verde, não há promoção para produção."
+
+### Momento 2 — Alterar um label (diferença entre os dois ambientes)
+1. Na branch `homolog`, altere uma letra de um texto em `templates/index.html`
+   (ex.: o título da página ou um cabeçalho da tabela).
+2. `git add templates/index.html && git commit -m "feat: ajusta label" && git push origin homolog`
+3. Actions **VERDE** → homolog atualiza sozinho.
+4. Abra `http://<IP>/homolog/` → a letra mudou. Abra `http://<IP>/prod/` → **continua a antiga**.
+
+> Discurso: "A mudança está só em homologação. Produção segue intacta porque eu ainda não
+> promovi para a main. Os ambientes são independentes."
+
+5. Quando quiser, `./scripts/promover_producao.sh` (digite PROMOVER) → produção recebe a
+   mesma alteração. Recarregue `/prod/` e mostre a letra atualizada.
+
+### Momento 3 — Tabela nova no banco via migrate (chega na produção)
+1. Na branch `homolog`, traga a migration:
+   `cp migrations/exemplos/V003__criar_tabela_categoria.sql migrations/`
+2. `git add migrations/V003__criar_tabela_categoria.sql && git commit -m "CHG-003: tabela categoria" && git push origin homolog`
+3. Actions verde → deploy de homolog roda o `migrate.py` e aplica a V003.
+4. Prove a diferença nos bancos:
+   ```bash
+   docker compose exec db-homolog psql -U postgres -d financas -c '\dt'   # TEM categoria
+   docker compose exec db-prod    psql -U postgres -d financas -c '\dt'   # NÃO tem
+   ```
+5. Promova: `./scripts/promover_producao.sh` (PROMOVER).
+6. Após o Actions verde na main, confirme que a tabela chegou na produção:
+   ```bash
+   docker compose exec db-prod psql -U postgres -d financas -c '\dt'      # AGORA tem categoria
+   ```
+
+> Discurso: "A migration foi versionada e aplicada primeiro em homologação. Depois de
+> validada e promovida, o mesmo `migrate.py` aplicou a tabela em produção. O versionamento
+> do banco acompanha o versionamento do código."
