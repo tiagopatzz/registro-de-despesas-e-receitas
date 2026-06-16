@@ -1,394 +1,277 @@
 # Roteiro da Apresentação — Tarefa Final GCS 2026/A
 
-Simulação completa, passo a passo, do que fazer e falar na banca.
-Os 13 passos do enunciado estão mapeados abaixo, mais a demo de falha (passo 6 do seu pedido).
+Simulação completa, passo a passo. Reflete a arquitetura final:
+compose único, limpeza total de imagens, sessão isolada por ambiente,
+pipeline com PR automático e Branch Protection.
 
-> **Antes de começar:** garanta que já fez UMA vez na vida da VM:
-> `./scripts/preparar_vm.sh` (instala Docker) e que o **runner self-hosted**
-> do GitHub está rodando como serviço. Isso NÃO faz parte da apresentação — é setup prévio.
-> Tenha dois terminais abertos na VM e o navegador no GitHub Actions do repositório.
-
----
-
-## SETUP MANUAL (fazer ANTES da apresentação, uma vez)
-
-Estas coisas **não** são automáticas — você precisa configurar:
-
-### 1. Enviar este código para o GitHub
-```bash
-# na sua máquina, dentro da pasta do projeto já com os arquivos novos
-git add .
-git commit -m "Configura pipeline CI/CD, Docker e migrations (Tarefa Final)"
-git push origin main
-```
-
-### 2. Criar a branch homolog (você só tem a main hoje)
-As branches **NÃO** são criadas automaticamente. Crie a `homolog` a partir da `main`:
-```bash
-git checkout main
-git pull origin main
-git checkout -b homolog
-git push -u origin homolog
-```
-Pronto: agora existem `main` (→ Produção) e `homolog` (→ Homologação). O workflow já
-está configurado para reagir a push nessas duas branches.
-
-### 3. Instalar o runner self-hosted na VM
-No GitHub: **Settings → Actions → Runners → New self-hosted runner → Linux x64**.
-Rode os comandos que a página mostra, dentro da VM. Ao final, instale como serviço:
-```bash
-sudo ./svc.sh install
-sudo ./svc.sh start
-```
-Confirme em Settings → Actions → Runners que ele aparece como **Idle** (verde).
-
-### 4. (Opcional) Senha de e-mail
-Se for demonstrar o envio de e-mail, exporte a senha de app do Gmail no ambiente do
-runner, ou crie um arquivo `.env` na pasta do projeto na VM com:
-```
-MAIL_PASSWORD=sua_senha_de_app
-```
-
-### O que é automático (você NÃO precisa fazer)
-- O pipeline dispara sozinho a cada `git push` nas branches `homolog`/`main`.
-- O bloqueio do deploy quando a Integração falha é automático (`needs: integracao`).
-- As migrations são aplicadas sozinhas quando o container sobe.
-- A rede e os volumes do Docker são criados sozinhos pelo `docker compose`.
+**Aplicação:** Sistema de Finanças Pessoais (Flask + PostgreSQL)
+**IP da VM:** http://177.44.248.72
+**Branches:** `homolog` (→ Homologação) e `main` (→ Produção)
 
 ---
 
-## FASE 0 — Preparar a "mesa limpa" (antes da banca entrar, ou no início)
+## PARTE A — SETUP (feito UMA vez, ANTES da apresentação)
 
-Objetivo: começar com os ambientes **inexistentes**, para poder criá-los ao vivo.
+Estes itens já devem estar prontos. Confira antes do dia:
+
+1. **Docker instalado na VM** e usuário `univates` no grupo `docker`
+   (`docker ps` funciona sem sudo).
+2. **Runner self-hosted** instalado como serviço e ativo
+   (GitHub → Settings → Actions → Runners → "Idle"/verde).
+3. **Branches `homolog` e `main`** existem no GitHub.
+4. **Permissão do Actions criar PR:** Settings → Actions → General → Workflow
+   permissions → "Read and write permissions" + "Allow GitHub Actions to create
+   and approve pull requests".
+5. **Branch Protection (ruleset) na `main`:** Enforcement Active, target `main`,
+   "Require a pull request before merging" (approvals = 0) e "Require status checks
+   to pass" → check `Integracao (testes + qualidade + build)`.
+
+> Observação: o check só aparece na lista do ruleset depois que a Integração rodou
+> uma vez dentro de um PR. Se não aparecer, crie um PR de teste, deixe rodar, e volte
+> para adicioná-lo.
+
+---
+
+## PARTE B — ESTADO INICIAL: nada existe
+
+### Passo 1 — Mostrar a VM zerada
 
 ```bash
-# Remove TUDO: containers, volumes, rede E imagens do projeto
+cd ~/registro-de-despesas-e-receitas
 ./scripts/destruir_ambientes.sh
-
-docker ps        # VAZIO - nada rodando
-docker images    # sem nenhuma imagem do projeto (financas-app, nginx:1.27, postgres:16-alpine)
 ```
 
-**O que falar:** "Vou começar com a VM totalmente zerada em relação ao projeto: nenhum
-container rodando e nenhuma imagem do sistema. Vou criar toda a infraestrutura do zero,
-de forma automatizada."
-
----
-
-## PASSO 1 — Apresentar ambientes com a estrutura NÃO existente
-
+Confirme:
 ```bash
 docker ps        # VAZIO - nenhum container
 docker images    # sem imagens do projeto
 ```
 
-**O que falar:** "Repare: `docker ps` vazio e `docker images` sem nada do projeto. A VM está
-limpa. Tudo o que vier a seguir é criado automaticamente pelos scripts."
+**Falar:** "Começo com a VM totalmente limpa: nenhum container e nenhuma imagem do
+projeto. Toda a infraestrutura será criada de forma automatizada pelos scripts."
 
 ---
 
-## PASSO 2 — Criar ambiente de Homologação
+## PARTE C — CRIAR OS AMBIENTES
+
+### Passo 2 — Criar Homologação
 
 ```bash
 ./scripts/criar_homolog.sh
 ```
 
-**O que acontece:** o script baixa as imagens base (python, nginx, postgres), constrói a
-imagem da aplicação do zero, sobe `db-homolog` e `app-homolog`. No log do `app-homolog`
-você vê o `migrate.py` aplicando **V001** (tabelas) e **V002** (dados).
+**Falar:** "Um script criou do zero: baixou as imagens base, construiu a imagem da
+aplicação, subiu o banco e o app, e aplicou as migrations automaticamente."
 
-> A primeira criação após o destruir leva mais tempo (baixa as bases). É esperado e
-> demonstra a criação 100% automatizada da infraestrutura.
-
+Mostre as migrations aplicadas:
 ```bash
 docker compose logs app-homolog | grep migrate
+docker compose exec db-homolog psql -U postgres -d financas -c '\dt'
+# tabelas: usuario, lancamento, schema_migrations
 ```
 
-**O que falar:** "Um único comando criou o container, instalou as ferramentas dentro dele,
-aplicou as migrations do banco e subiu a aplicação."
+### Passo 3 — Mostrar que Produção ainda NÃO existe
 
----
+```bash
+docker ps   # só nginx, app-homolog, db-homolog (nada de prod)
+```
 
-## PASSO 3 — Criar ambiente de Produção
+**Falar:** "Produção ainda não existe — vou criá-la separadamente, mostrando que os
+ambientes são independentes."
+
+### Passo 4 — Criar Produção
 
 ```bash
 ./scripts/criar_prod.sh
-docker ps   # agora: nginx-gcs, app-homolog, db-homolog, app-prod, db-prod
-```
-
-> É normal e esperado que apareçam containers AGORA — a aplicação precisa estar rodando para
-> ser demonstrada. A exigência do professor ("nada rodando") vale para o estado de REPOUSO,
-> no início e no fim. Ao terminar, rode `./scripts/destruir_ambientes.sh` e o `docker ps`
-> volta a ficar vazio.
-
----
-
-## PASSO 4 — Aplicação funcionando em Homologação
-
-No navegador: **http://<IP-da-VM>/homolog/**
-- Login: `admin` / senha: `admin123`
-- Mostrar a lista de lançamentos, criar um lançamento, exportar o PDF.
-
----
-
-## PASSO 5 — Aplicação funcionando em Produção
-
-No navegador: **http://<IP-da-VM>/prod/** — mesmo login. Mostre que é um ambiente separado
-(dados independentes do de Homolog).
-
-**O que falar:** "São dois ambientes isolados: bancos diferentes, volumes diferentes, mesmo
-código. O NGINX separa por caminho: /homolog e /prod."
-
----
-
-## PASSO 6 — Registrar a mudança
-
-No GitHub, abrir uma **Issue**. Ex.: título *"Criar tabela categoria para classificar
-lançamentos"*, número **#3**.
-
-**O que falar:** "A mudança começa com um registro rastreável. Toda alteração vai referenciar
-essa issue no commit."
-
----
-
-## ★ DEMONSTRAÇÃO DE BLOQUEIO DO PIPELINE (o ponto que você pediu) ★
-
-Faça isto ANTES de implementar a mudança real, para mostrar o portão de qualidade.
-
-**1. Descomentar o erro** no `app.py` (linha ~12), na branch `homolog`:
-
-```python
-# de:
-# def funcao_quebrada(:
-# para:
-def funcao_quebrada(:
-```
-
-**2. Commit e push:**
-```bash
-git checkout homolog
-git add app.py
-git commit -m "CHG-002: demo de falha no pipeline (issue #2)"
-git push origin homolog
-```
-
-**3. No GitHub Actions**, mostrar ao vivo:
-- O job **Integração** fica VERMELHO.
-- No passo do flake8: erro `E999 SyntaxError`.
-- No passo dos testes: os 20 falham no `from app import app` (erro de import).
-- Os jobs **deploy-homolog** aparecem como **Skipped** (cinza) — nunca executam.
-
-**4. Provar que o ambiente seguiu intacto:**
-```bash
-curl -I http://localhost/homolog/   # continua 200 OK, versão anterior no ar
-```
-
-**O que falar (importante para a banca):** "O pipeline é um portão. Como o código não passou
-na Integração — nem o lint nem os testes — a etapa de deploy nem chega a rodar. O ambiente
-de Homologação continua funcionando com a versão anterior. Nenhum código quebrado chega aos
-ambientes."
-
-> **Esclarecimento sobre "proibir ir para a outra branch":** o pipeline não impede
-> fisicamente o `git push` nem o merge — o Git aceita o push do código quebrado para a branch
-> `homolog`. O que o pipeline bloqueia é o **deploy**: o código quebrado fica na branch, mas
-> NÃO é publicado em nenhum ambiente, porque o job de deploy só roda se a Integração passar
-> (`needs: integracao`). Se quiser também impedir o merge de `homolog` para `main` enquanto a
-> Integração estiver vermelha, dá para ativar **Branch Protection** na `main` (Settings →
-> Branches → Add rule → "Require status checks to pass") — opcional, mas reforça o discurso.
-
-**5. Reverter o erro** (comentar de novo) para liberar o fluxo:
-```bash
-# voltar a linha para: # def funcao_quebrada(:
-git add app.py
-git commit -m "Revert CHG-002: remove erro de demonstracao"
-git push origin homolog
-```
-Agora o pipeline fica VERDE e o deploy-homolog roda. (Pode deixar esse push já encadeado
-com o passo 7/8 abaixo, num commit só, para economizar tempo.)
-
----
-
-## PASSO 7 — Implementar (código-fonte + banco de dados)
-
-Na branch `homolog`, trazer a migration da tabela nova:
-
-```bash
-cp migrations/exemplos/V003__criar_tabela_categoria.sql migrations/
-```
-
-(Se for alterar código junto, faça aqui. Para a demo da tabela, a migration já basta.)
-
----
-
-## PASSO 8 — Versionar
-
-```bash
-git add migrations/V003__criar_tabela_categoria.sql
-git commit -m "CHG-003: criar tabela categoria (closes #3)"
-git push origin homolog
+docker ps   # agora os 5: nginx, app-homolog, db-homolog, app-prod, db-prod
 ```
 
 ---
 
-## PASSO 9 — Integração (testes + qualidade + build)
+## PARTE D — APLICAÇÃO FUNCIONANDO
 
-No GitHub Actions, mostrar o job **Integração** agora VERDE:
-- **flake8** passou (qualidade de código).
-- **20 testes** executados com `coverage run -m unittest -v`.
-- **Estatísticas** do coverage no log + artefato `coverage.xml` para download.
-- **Build** da imagem Docker concluído.
+### Passo 5 — Homologação no ar
+Navegador (aba anônima): **http://177.44.248.72/homolog/**
+Login: `admin` / `admin123`. Mostre o dashboard, crie um lançamento, exporte o PDF.
 
-**O que falar:** "Agora com o código correto, a Integração passa nas três frentes: qualidade,
-os 20 testes automatizados com estatística de cobertura, e o build."
+### Passo 6 — Produção no ar
+Outra aba anônima: **http://177.44.248.72/prod/** — mesmo login.
 
----
-
-## PASSO 10 — Atualizar ambiente de Homologação
-
-O job **deploy-homolog** roda automaticamente após a Integração (é o runner self-hosted da VM).
-Se preferir disparar manualmente: GitHub → Actions → *Run workflow* na branch `homolog`.
-
-```bash
-# acompanhar na VM:
-docker compose logs app-homolog | grep migrate
-```
-Você verá: `V003 aplicada com sucesso`.
+**Falar:** "Dois ambientes isolados: bancos, volumes e sessões independentes. Posso
+estar logado nos dois ao mesmo tempo sem um derrubar o outro."
 
 ---
 
-## PASSO 11 — Homolog atualizado + atualização do Banco de Dados
+## PARTE E — CICLO DE MUDANÇA (os 3 momentos-chave)
 
-Mostrar a tabela nova SÓ em Homolog:
+### Passo 7 — Registrar a mudança
+No GitHub, abra uma **Issue** (ex.: "Criar tabela categoria para classificar
+lançamentos", #3).
 
-```bash
-docker compose exec db-homolog \
-  psql -U postgres -d financas -c '\dt'
-# aparece: usuario, lancamento, schema_migrations, CATEGORIA  ✅
-```
-
-E provar que em Produção **NÃO** existe ainda:
-
-```bash
-docker compose exec db-prod \
-  psql -U postgres -d financas -c '\dt'
-# NÃO aparece categoria  ❌  (Prod está na versão anterior do banco)
-```
-
-**O que falar:** "Aqui está o versionamento independente do banco: a migration V003 foi aplicada
-só em Homologação, porque o commit ainda não foi promovido para a branch main. Produção
-permanece na versão anterior do schema."
+**Falar:** "Toda mudança começa com um registro rastreável."
 
 ---
 
-## PASSO 12 — Atualizar ambiente de Produção
+### ★ MOMENTO 1 — Código com erro NÃO chega aos ambientes
 
-Promover a mudança para produção usando o script de promoção controlada:
+1. Na branch `homolog`, no `app.py`, **descomente** a linha 12:
+   ```python
+   # de:    # def funcao_quebrada(:
+   # para:  def funcao_quebrada(:
+   ```
+2. Commit e push:
+   ```bash
+   git add app.py
+   git commit -m "CHG-002: demonstracao de falha no pipeline"
+   git push origin homolog
+   ```
+3. No GitHub Actions: o job **Integração fica VERMELHO**
+   - flake8 acusa `E999 SyntaxError`
+   - os 20 testes falham no `from app import app`
+4. Os jobs **Atualizar HOMOLOGAÇÃO**, **abrir-pr** e **Atualizar PRODUÇÃO** ficam
+   **Skipped** — não rodam.
+5. Prove que homolog seguiu intacto:
+   ```bash
+   curl -I http://177.44.248.72/homolog/   # ainda responde (versão anterior)
+   ```
 
-```bash
-./scripts/promover_producao.sh
-# digite PROMOVER quando pedir confirmação
-```
+**Falar:** "O pipeline é um portão. Como a Integração reprovou, nenhum deploy rodou e
+nenhum PR foi criado. Código quebrado não chega a Homologação nem a Produção."
 
-O script faz o merge `homolog → main` e o push. O push na `main` dispara a Integração
-de novo e, passando, o job **deploy-prod** atualiza a Produção.
-
----
-
-## PASSO 13 — Prod atualizado + atualização do Banco de Dados
-
-```bash
-docker compose exec db-prod \
-  psql -U postgres -d financas -c '\dt'
-# agora a tabela CATEGORIA aparece também em Produção  ✅
-```
-
-Abrir **http://<IP-da-VM>/prod/** e mostrar a aplicação no ar com o banco atualizado.
-
-**O que falar:** "Promovida para a main, a mesma migration foi aplicada em Produção pelo pipeline.
-Os dois ambientes agora estão na mesma versão de schema, cada um com seus próprios dados."
-
----
-
-## Resumo do mapeamento (cola rápida)
-
-| Passo | Comando-chave |
-|---|---|
-| 1 | `docker ps` / `curl -I .../homolog/` (502) |
-| 2 | `./scripts/criar_homolog.sh` |
-| 3 | `./scripts/criar_prod.sh` |
-| 4-5 | navegador `/homolog/` e `/prod/` (admin/admin123) |
-| 6 | abrir Issue no GitHub |
-| ★ | descomentar erro → push homolog → Actions vermelho → deploy Skipped → reverter |
-| 7 | `cp migrations/exemplos/V003__*.sql migrations/` |
-| 8 | `git commit` + `git push origin homolog` |
-| 9 | GitHub Actions: flake8 + 20 testes + coverage + build |
-| 10 | deploy-homolog (auto) |
-| 11 | `\dt` no db-homolog (tem categoria) vs db-prod (não tem) |
-| 12 | `git checkout main && git merge homolog && git push` |
-| 13 | `\dt` no db-prod (agora tem categoria) |
+6. **Reverter:** comente a linha de novo e faça push:
+   ```bash
+   git add app.py
+   git commit -m "Revert: remove erro de demonstracao"
+   git push origin homolog
+   ```
+   Agora a Integração fica **VERDE**, o deploy de homolog roda e o **PR é criado
+   automaticamente**.
 
 ---
 
-## Plano B (se a VM não tiver internet para o runner)
+### ★ MOMENTO 2 — Alterar um label (diferença entre ambientes)
 
-Se o runner self-hosted não conseguir falar com o GitHub, os deploys automáticos não rodam.
-Nesse caso, o processo continua **semi-automatizado e válido**: após a Integração verde no
-GitHub, você atualiza o ambiente na VM com um comando:
+1. Na branch `homolog`, altere uma letra/texto em `templates/index.html`
+   (ex.: o título da página).
+2. Commit e push:
+   ```bash
+   git add templates/index.html
+   git commit -m "feat: ajusta label do dashboard (closes #3)"
+   git push origin homolog
+   ```
+3. Actions **VERDE** → **Atualizar HOMOLOGAÇÃO** roda → homolog atualiza.
+4. Recarregue **/homolog/** (a letra mudou) e **/prod/** (continua a antiga).
 
-```bash
-git pull origin homolog && ./scripts/criar_homolog.sh   # atualiza Homolog
-git pull origin main    && ./scripts/criar_prod.sh      # atualiza Prod
-```
-
-Vale confirmar o acesso à internet da VM antes da apresentação, para saber qual caminho seguir.
+**Falar:** "A mudança está só em Homologação. Produção segue intacta porque ainda não
+promovi. Os ambientes são independentes."
 
 ---
 
-## ANEXO — Seus 3 momentos-chave da demonstração
+### ★ MOMENTO 3 — Tabela nova no banco via migrate
 
-Mapeamento direto dos três pontos que você vai demonstrar, na ordem sugerida.
-
-### Momento 1 — Erro NÃO segue para aprovação de produção
-1. Na branch `homolog`, descomente a linha do erro no `app.py` (tire o `# ` de
-   `# def funcao_quebrada(:`).
-2. `git add app.py && git commit -m "CHG: demo de falha" && git push origin homolog`
-3. No GitHub Actions: job **Integração VERMELHO** (flake8 acusa E999; os 20 testes nem rodam).
-4. Mostre que o deploy fica **Skipped** → nada vai para homolog nem para produção.
-5. **NÃO rode** `promover_producao.sh` — ou, se rodar, mostre que você não deve promover
-   um commit que está vermelho no Actions (o portão é o Actions, e ele reprovou).
-6. Reverta: comente a linha de novo, commit e push → Actions **VERDE**.
-
-> Discurso: "O erro trava na Integração. Sem Integração verde, não há promoção para produção."
-
-### Momento 2 — Alterar um label (diferença entre os dois ambientes)
-1. Na branch `homolog`, altere uma letra de um texto em `templates/index.html`
-   (ex.: o título da página ou um cabeçalho da tabela).
-2. `git add templates/index.html && git commit -m "feat: ajusta label" && git push origin homolog`
-3. Actions **VERDE** → homolog atualiza sozinho.
-4. Abra `http://<IP>/homolog/` → a letra mudou. Abra `http://<IP>/prod/` → **continua a antiga**.
-
-> Discurso: "A mudança está só em homologação. Produção segue intacta porque eu ainda não
-> promovi para a main. Os ambientes são independentes."
-
-5. Quando quiser, `./scripts/promover_producao.sh` (digite PROMOVER) → produção recebe a
-   mesma alteração. Recarregue `/prod/` e mostre a letra atualizada.
-
-### Momento 3 — Tabela nova no banco via migrate (chega na produção)
 1. Na branch `homolog`, traga a migration:
-   `cp migrations/exemplos/V003__criar_tabela_categoria.sql migrations/`
-2. `git add migrations/V003__criar_tabela_categoria.sql && git commit -m "CHG-003: tabela categoria" && git push origin homolog`
-3. Actions verde → deploy de homolog roda o `migrate.py` e aplica a V003.
-4. Prove a diferença nos bancos:
+   ```bash
+   cp migrations/exemplos/V003__criar_tabela_categoria.sql migrations/
+   git add migrations/V003__criar_tabela_categoria.sql
+   git commit -m "CHG-003: cria tabela categoria"
+   git push origin homolog
+   ```
+2. Actions verde → deploy de homolog roda o `migrate.py` e aplica a V003.
+3. Prove a diferença nos bancos:
    ```bash
    docker compose exec db-homolog psql -U postgres -d financas -c '\dt'   # TEM categoria
    docker compose exec db-prod    psql -U postgres -d financas -c '\dt'   # NÃO tem
    ```
-5. Promova: `./scripts/promover_producao.sh` (PROMOVER).
-6. Após o Actions verde na main, confirme que a tabela chegou na produção:
-   ```bash
-   docker compose exec db-prod psql -U postgres -d financas -c '\dt'      # AGORA tem categoria
-   ```
 
-> Discurso: "A migration foi versionada e aplicada primeiro em homologação. Depois de
-> validada e promovida, o mesmo `migrate.py` aplicou a tabela em produção. O versionamento
-> do banco acompanha o versionamento do código."
+**Falar:** "A migration foi versionada e aplicada só em Homologação. O versionamento
+do banco acompanha o do código: cada ambiente evolui conforme o que chega nele."
+
+---
+
+## PARTE F — PROMOÇÃO PARA PRODUÇÃO (via PR automático)
+
+### Passo 8 — Revisar e aprovar o PR
+
+Após cada push verde na `homolog`, o pipeline **cria/atualiza automaticamente** um PR
+de `homolog → main` (job `abrir-pr`).
+
+1. GitHub → **Pull requests** → abra o PR "Promover Homologacao para Producao".
+2. Veja o diff (suas mudanças: label + migration V003).
+3. Confirme que a Integração está **verde** no PR (se vermelha, o Branch Protection
+   bloqueia o merge).
+4. **Merge pull request** → **Confirm merge**.
+
+**Falar:** "A promoção é controlada: eu reviso o PR e decido aprovar. O merge só é
+liberado porque a Integração passou."
+
+### Passo 9 — Produção atualizada
+
+O merge gera um push na `main` → a Integração roda de novo → o job **Atualizar
+PRODUÇÃO** aplica tudo em produção (código + migrations).
+
+Prove que agora produção tem a tabela e o label novo:
+```bash
+docker compose exec db-prod psql -U postgres -d financas -c '\dt'   # AGORA tem categoria
+```
+Recarregue **http://177.44.248.72/prod/** → label atualizado.
+
+**Falar:** "Promovida para a main, a mesma mudança foi aplicada em Produção pelo
+pipeline. Os dois ambientes agora estão na mesma versão, cada um com seus dados."
+
+---
+
+## PARTE G — ENCERRAMENTO (opcional)
+
+Se o professor quiser ver a VM limpa de novo:
+```bash
+./scripts/destruir_ambientes.sh
+docker ps        # vazio
+docker images    # sem imagens do projeto
+```
+
+---
+
+## COLA RÁPIDA (sequência de comandos)
+
+| # | Comando |
+|---|---|
+| 1 | `./scripts/destruir_ambientes.sh` → `docker ps` / `docker images` (vazios) |
+| 2 | `./scripts/criar_homolog.sh` |
+| 3 | `docker ps` (sem prod) |
+| 4 | `./scripts/criar_prod.sh` |
+| 5-6 | navegador `/homolog/` e `/prod/` (admin/admin123) |
+| 7 | abrir Issue no GitHub |
+| M1 | descomenta erro → push homolog → Actions vermelho → tudo Skipped → reverte |
+| M2 | altera label → push homolog → homolog muda, prod não |
+| M3 | `cp migrations/exemplos/V003*.sql migrations/` → push → `\dt` (homolog tem, prod não) |
+| 8 | GitHub → PR automático → revisar → Merge |
+| 9 | `docker compose exec db-prod ... '\dt'` (agora tem categoria) |
+
+---
+
+## MAPEAMENTO DAS FASES DO ENUNCIADO (A–H)
+
+| Fase | Onde aparece |
+|---|---|
+| A) Registro da mudança | Issue no GitHub (Passo 7) |
+| B) Implementação | Python/Flask (Momentos 2 e 3) |
+| C) Versionamento | Git + branches homolog/main |
+| D) Testes automatizados (20) + estatísticas | Job Integração: unittest + coverage |
+| E) Análise de qualidade | flake8 no job Integração |
+| F) Atualizar Homologação | Job "Atualizar HOMOLOGAÇÃO" |
+| G) Atualizar Produção | Job "Atualizar PRODUÇÃO" (após merge do PR) |
+| H) Criar ambientes Homolog e Prod | scripts criar_homolog.sh / criar_prod.sh |
+
+Versionamento do banco: migrations em `migrations/` aplicadas pelo `migrate.py` em cada
+deploy; tabela `schema_migrations` controla o que já rodou em cada banco.
+
+---
+
+## PLANO B (se algo der errado no dia)
+
+- **Runner offline / sem internet:** atualize os ambientes na mão após o push verde:
+  `git pull origin homolog && ./scripts/criar_homolog.sh`
+- **PR automático não criou:** crie o PR manualmente (Pull requests → New → base main,
+  compare homolog).
+- **Build demorando:** a primeira criação após destruir baixa as imagens base; é
+  esperado. Ensaie antes para saber o tempo na rede da Univates.

@@ -16,6 +16,8 @@ name: Pipeline CI/CD - GCS
 on:
   push:
     branches: [homolog, main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -90,11 +92,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Atualizar Homolog (NGINX + app + migrations)
-        run: docker compose up -d --build nginx app-homolog db-homolog
+        run: sudo docker compose up -d --build nginx app-homolog db-homolog
       - name: Versao do banco em Homolog
         run: |
           sleep 5
-          docker compose exec -T db-homolog psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"
+          sudo docker compose exec -T db-homolog psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"
+
+  abrir-pr:
+    name: "Abrir PR de promocao (homolog -> main)"
+    needs: deploy-homolog
+    if: github.ref == 'refs/heads/homolog'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Criar ou atualizar o Pull Request para a main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Se ja existe um PR aberto de homolog -> main, nao cria outro.
+          existente=$(gh pr list --base main --head homolog --state open --json number --jq '.[0].number')
+          if [ -n "$existente" ]; then
+            echo "PR #$existente ja existe e foi atualizado com o novo commit."
+          else
+            gh pr create \
+              --base main \
+              --head homolog \
+              --title "Promover Homologacao para Producao" \
+              --body "PR criado automaticamente apos o deploy de Homologacao passar na Integracao. Revise e faca o merge para atualizar a Producao."
+            echo "PR criado. Aprove e faca merge para promover para Producao."
+          fi
 
   deploy-prod:
     name: "Atualizar PRODUCAO"
@@ -104,8 +133,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Atualizar Producao (NGINX + app + migrations)
-        run: docker compose up -d --build nginx app-prod db-prod
+        run: sudo docker compose up -d --build nginx app-prod db-prod
       - name: Versao do banco em Producao
         run: |
           sleep 5
-          docker compose exec -T db-prod psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"
+          sudo docker compose exec -T db-prod psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"
