@@ -19,6 +19,16 @@ from fpdf import FPDF
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'chave_secreta_tarefa_3')
 
+# --- ISOLAMENTO DE SESSAO ENTRE AMBIENTES ---
+# Homolog e Prod rodam no mesmo dominio (177.44.248.72), separados so
+# pelo caminho (/homolog e /prod). Sem isto, o cookie de sessao de um
+# sobrescreve o do outro e o login "cai" ao trocar de ambiente.
+# Cada ambiente usa um cookie com nome e caminho proprios.
+_prefix = os.environ.get('APP_PREFIX', '')
+if _prefix:
+    app.config['SESSION_COOKIE_PATH'] = _prefix
+    app.config['SESSION_COOKIE_NAME'] = 'session_' + _prefix.strip('/')
+
 # --- CONFIGURAÇÃO DE E-MAIL ---
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
