@@ -5,7 +5,9 @@
 #   push em 'main'    -> Integracao -> Deploy PRODUCAO
 #
 # Integracao roda na nuvem do GitHub (ubuntu-latest):
-#   flake8 -> 20 testes -> estatisticas de cobertura -> build.
+#   flake8 -> migrations -> 20 testes -> cobertura -> build.
+# Para os testes que acessam o banco, um PostgreSQL temporario sobe
+# como "service container" e recebe as migrations antes dos testes.
 # Deploys rodam no runner SELF-HOSTED instalado na VM da Univates.
 # Se a Integracao FALHAR, os deploys NAO executam (ficam Skipped).
 # =====================================================================
@@ -14,12 +16,38 @@ name: Pipeline CI/CD - GCS
 on:
   push:
     branches: [homolog, main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   integracao:
     name: "Integracao (testes + qualidade + build)"
     runs-on: ubuntu-latest
+
+    # Banco temporario so para os testes da Integracao
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: financas
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d financas"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DB_HOST: localhost
+      DB_NAME: financas
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_PORT: "5432"
+
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +63,9 @@ jobs:
 
       - name: Analise de qualidade (flake8)
         run: flake8 app.py test_app.py migrate.py
+
+      - name: Aplicar migrations no banco de teste
+        run: python migrate.py
 
       - name: Testes automatizados (20 testes)
         run: coverage run -m unittest -v
@@ -61,11 +92,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Atualizar Homolog (NGINX + app + migrations)
-        run: docker compose up -d --build nginx app-homolog db-homolog
+        run: sudo docker compose up -d --build nginx app-homolog db-homolog
       - name: Versao do banco em Homolog
         run: |
           sleep 5
-          docker compose exec -T db-homolog psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"
+          sudo docker compose exec -T db-homolog psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"
+
+  abrir-pr:
+    name: "Abrir PR de promocao (homolog -> main)"
+    needs: deploy-homolog
+    if: github.ref == 'refs/heads/homolog'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Criar ou atualizar o Pull Request para a main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Se ja existe um PR aberto de homolog -> main, nao cria outro.
+          existente=$(gh pr list --base main --head homolog --state open --json number --jq '.[0].number')
+          if [ -n "$existente" ]; then
+            echo "PR #$existente ja existe e foi atualizado com o novo commit."
+          else
+            gh pr create \
+              --base main \
+              --head homolog \
+              --title "Promover Homologacao para Producao" \
+              --body "PR criado automaticamente apos o deploy de Homologacao passar na Integracao. Revise e faca o merge para atualizar a Producao."
+            echo "PR criado. Aprove e faca merge para promover para Producao."
+          fi
 
   deploy-prod:
     name: "Atualizar PRODUCAO"
@@ -75,8 +133,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Atualizar Producao (NGINX + app + migrations)
-        run: docker compose up -d --build nginx app-prod db-prod
+        run: sudo docker compose up -d --build nginx app-prod db-prod
       - name: Versao do banco em Producao
         run: |
           sleep 5
-          docker compose exec -T db-prod psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"
+          sudo docker compose exec -T db-prod psql -U postgres -d financas -c "SELECT * FROM schema_migrations ORDER BY versao;"
