@@ -9,7 +9,7 @@ import os
 # falham no "from app import app" -> deploy fica como "Skipped".
 # Depois, comente novamente e faca push -> pipeline volta a passar.
 # =====================================================================
-# def funcao_quebrada(:
+def funcao_quebrada(:
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, make_response
 import psycopg2
